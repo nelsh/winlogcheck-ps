@@ -12,16 +12,43 @@ function writeUsage($msg) {
     `$scriptname -mode test -filter <filter_name>`n`n"
 }
 
+
+function ignoreFilterPath($filter) {
+    Join-Path (Join-Path $PSScriptRoot "ignore.conf") $filter
+}
+function specialFilterPath($filter) {
+    Join-Path (Join-Path $PSScriptRoot "special.conf") $filter
+}
+
 function baseEventQuery($log, $depthHours) {
     $depthEventTime = ((Get-Date).AddHours(-$depthHours).ToUniversalTime().ToString("yyyyMMdd HH") + ":00:00")
     "SELECT * FROM Win32_NTLogEvent 
-        WHERE LogFile = '{0}' AND TimeGenerated >= '{1}'"`
-        -f $log, $depthEventTime
+        WHERE LogFile = '$log' AND TimeGenerated >= '$depthEventTime'"
 }
 
+function createEventsReport($log, $where) {
+    $query = (baseEventQuery $log 24) + (" AND ({0})" -f $where)
+    [wmisearcher]$wmis = $query
+    try {
+        $events = $wmis.Get()
+    } catch {
+        Write-Host "$msg : failed.`nQuery: $query`n" -foregroundcolor "red"
+        "Exception:`n"
+        $_.Exception.ToString()
+        exit (1)
+    }
+    foreach ($e in $events) {
+        Write-Host ("{0}`t{1}`t{2}`t{3}`t{4}`t{5}`n"`
+            -f $e.Type, $e.TimeGenerated.Split('.')[0], $e.SourceName, $e.CategoryString, $e.EventCode, $e.UserName)
+    }
+}
+
+
+### Task TEST ###
+
 function runTest($filter) {
-    $ignoreFilterPath = Join-Path (Join-Path $PSScriptRoot "ignore.conf") $filter
-    $specialFilterPath = Join-Path (Join-Path $PSScriptRoot "special.conf") $filter
+    $ignoreFilterPath = ignoreFilterPath($filter)
+    $specialFilterPath = specialFilterPath($filter)
     $where = ""
     $filterin = ""
     if (Test-Path $ignoreFilterPath) {
@@ -50,8 +77,7 @@ function runTest($filter) {
         Write-Host "$msg : OK`n" -foregroundcolor "green"
         "Query:  $query"
     } catch {
-        Write-Host "$msg : failed.`n" -foregroundcolor "red"
-        Write-Host "Query: $query`n" -foregroundcolor "red"
+        Write-Host "$msg : failed.`nQuery: $query`n" -foregroundcolor "red"
         "Exception:`n"
         $_.Exception.ToString()
         exit (1)
@@ -59,7 +85,19 @@ function runTest($filter) {
 
 }
 
-function runSpecial($filter) {}
+### Task SPECIAL ###
+
+function runSpecial($filter) {
+    $specialFilterPath = specialFilterPath($filter)
+    if (Test-Path $specialFilterPath) {
+        $where = Get-Content $specialFilterPath
+    }
+    else {
+        Write-Host "Special filter '$filter' not found`n" -foregroundcolor "red"
+        exit(1)
+    }
+    createEventsReport ($filter.Split('.')[0]) $where
+}
 
 function runIgnore($log) {}
 
