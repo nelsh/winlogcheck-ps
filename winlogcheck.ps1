@@ -26,11 +26,20 @@ function runTest($filter) {
     }
     $log =  $filter.Split('.')[0]
 
-    [wmisearcher]$query = "SELECT * FROM Win32_NTLogEvent 
+    $query = "SELECT * FROM Win32_NTLogEvent 
         WHERE LogFile = '{0}' AND TimeGenerated >= '{1}' AND ({2})"`
         -f $log, (Get-Date).AddDays(-10).ToUniversalTime().ToString("yyyyMMdd HH:mm:ss"), $where
-    Write-Debug "Run query: $query"
-    $query.Get()
+    [wmisearcher]$wmis = $query
+    try {
+        $events = $wmis.Get()
+        Write-Host "Test: OK`n" -foregroundcolor "green"
+        "Query:  $query"
+    } catch {
+        Write-Host "Run query: $query`n" -foregroundcolor "red"
+        "Exception:`n"
+        $_.Exception.ToString()
+        exit (1)
+    }
 
 }
 
