@@ -24,13 +24,14 @@ function runTest($filter) {
         Write-Host "Filter '$filter' not found`n" -foregroundcolor "red"
         exit(1)
     }
-    $log =  $filter.Split('-')[0]
+    $log =  $filter.Split('.')[0]
 
-    $query = "SELECT * FROM Win32_NTLogEvent 
+    [wmisearcher]$query = "SELECT * FROM Win32_NTLogEvent 
         WHERE LogFile = '{0}' AND TimeGenerated >= '{1}' AND ({2})"`
-        -f $log, (Get-Date).AddDays(-1).ToUniversalTime().ToString("yyyyMMdd HH:mm:ss"), $where
+        -f $log, (Get-Date).AddDays(-10).ToUniversalTime().ToString("yyyyMMdd HH:mm:ss"), $where
     Write-Debug "Run query: $query"
-    Get-WmiObject -Query $query
+    $query.Get()
+
 }
 
 function runSpecial($filter) {}
