@@ -12,10 +12,8 @@ function writeUsage($msg) {
     `$scriptname -mode test -filter <filter_name>`n`n"
 }
 
-function roundEventTime($depthHours) {
-    return ((Get-Date).AddHours(-$depthHours).ToUniversalTime().ToString("yyyyMMdd HH") + ":00:00")
-}
-function baseEventQuery($log, $depthEventTime) {
+function baseEventQuery($log, $depthHours) {
+    $depthEventTime = ((Get-Date).AddHours(-$depthHours).ToUniversalTime().ToString("yyyyMMdd HH") + ":00:00")
     "SELECT * FROM Win32_NTLogEvent 
         WHERE LogFile = '{0}' AND TimeGenerated >= '{1}'"`
         -f $log, $depthEventTime
@@ -45,8 +43,7 @@ function runTest($filter) {
         exit (1)
         
     }
-    $query = (baseEventQuery $log (roundEventTime(24)))
-        + (" AND ({0})" -f $where)
+    $query = (baseEventQuery $log 24) + (" AND ({0})" -f $where)
     [wmisearcher]$wmis = $query
     try {
         $wmis.Get().Lenght
