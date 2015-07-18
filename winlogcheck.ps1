@@ -38,8 +38,10 @@ function createEventsReport($log, $where) {
         exit (1)
     }
     foreach ($e in $events) {
+        $shortTime = [DateTime]::ParseExact($e.TimeGenerated.Split('.')[0], "yyyyMMddHHmmss", [Globalization.CultureInfo]::InvariantCulture).ToLocalTime().ToString("HH:mm:ss")
         Write-Host ("{0}`t{1}`t{2}`t{3}`t{4}`t{5}`n"`
-            -f $e.Type, $e.TimeGenerated.Split('.')[0], $e.SourceName, $e.CategoryString, $e.EventCode, $e.UserName)
+            -f $e.Type, $shortTime, $e.SourceName, $e.CategoryString, $e.EventCode, $e.UserName)
+        Write-Host ("{0}`n`n" -f $e.Message)
     }
 }
 
