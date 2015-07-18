@@ -12,30 +12,46 @@ function writeUsage($msg) {
     `$scriptname -mode test -filter <filter_name>`n`n"
 }
 
+function roundEventTime($depthHours) {
+    return ((Get-Date).AddHours(-$depthHours).ToUniversalTime().ToString("yyyyMMdd HH") + ":00:00")
+}
+
 function runTest($filter) {
+    $ignoreFilterPath = Join-Path (Join-Path $PSScriptRoot "ignore.conf") $filter
+    $specialFilterPath = Join-Path (Join-Path $PSScriptRoot "special.conf") $filter
     $where = ""
-    if (Test-Path (Join-Path $ignorepath $filter)) {
-        $where = Get-Content (Join-Path $ignorepath $filter)
+    $filterin = ""
+    if (Test-Path $ignoreFilterPath) {
+        $where = Get-Content $ignoreFilterPath
+        $filterin = "ignore"
     }
-    elseif (Test-Path (Join-Path $specialpath $filter)) {
-        $where = Get-Content (Join-Path $specialpath $filter)
+    elseif (Test-Path $specialFilterPath) {
+        $where = Get-Content $specialFilterPath
+        $filterin = "special"
     }
     else {
         Write-Host "Filter '$filter' not found`n" -foregroundcolor "red"
         exit(1)
     }
     $log =  $filter.Split('.')[0]
-
+    $msg = "Test filter='$filter' in '$filterin' for log='$log'"
+    if ( (Get-EventLog -List | Where-Object {$_.Log -eq $log}).Length -eq 0) {
+        Write-Host "$msg : failed. Log '$log' not found`n" -foregroundcolor "red"
+        exit (1)
+        
+    }
+    $depthEventTime = roundEventTime(24)
     $query = "SELECT * FROM Win32_NTLogEvent 
         WHERE LogFile = '{0}' AND TimeGenerated >= '{1}' AND ({2})"`
-        -f $log, (Get-Date).AddDays(-10).ToUniversalTime().ToString("yyyyMMdd HH:mm:ss"), $where
+        -f $log, $depthEventTime, $where
     [wmisearcher]$wmis = $query
     try {
-        $events = $wmis.Get()
-        Write-Host "Test: OK`n" -foregroundcolor "green"
+        $wmis.Get().Lenght
+        Write-Host "$msg : OK`n" -foregroundcolor "green"
         "Query:  $query"
     } catch {
-        Write-Host "Run query: $query`n" -foregroundcolor "red"
+        Write-Host "$msg : failed.`n" -foregroundcolor "red"
+        Write-Host "Query: $query`n" -foregroundcolor "red"
         "Exception:`n"
         $_.Exception.ToString()
         exit (1)
@@ -72,8 +88,6 @@ if (!(Test-Path $inifile)) {
 $ini = ConvertFrom-StringData((Get-Content $inifile) -join "`n")
 
 # 2. Run Task
-$ignorepath = Join-Path $PSScriptRoot "ignore.conf"
-$specialpath = Join-Path $PSScriptRoot "special.conf"
 switch ($mode) {
     "ignore"  { runIgnore($log) }
     "special" { runSpecial($filter) }
