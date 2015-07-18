@@ -15,6 +15,11 @@ function writeUsage($msg) {
 function roundEventTime($depthHours) {
     return ((Get-Date).AddHours(-$depthHours).ToUniversalTime().ToString("yyyyMMdd HH") + ":00:00")
 }
+function baseEventQuery($log, $depthEventTime) {
+    "SELECT * FROM Win32_NTLogEvent 
+        WHERE LogFile = '{0}' AND TimeGenerated >= '{1}'"`
+        -f $log, $depthEventTime
+}
 
 function runTest($filter) {
     $ignoreFilterPath = Join-Path (Join-Path $PSScriptRoot "ignore.conf") $filter
@@ -40,10 +45,8 @@ function runTest($filter) {
         exit (1)
         
     }
-    $depthEventTime = roundEventTime(24)
-    $query = "SELECT * FROM Win32_NTLogEvent 
-        WHERE LogFile = '{0}' AND TimeGenerated >= '{1}' AND ({2})"`
-        -f $log, $depthEventTime, $where
+    $query = (baseEventQuery $log (roundEventTime(24)))
+        + (" AND ({0})" -f $where)
     [wmisearcher]$wmis = $query
     try {
         $wmis.Get().Lenght
