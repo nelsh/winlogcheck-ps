@@ -51,6 +51,7 @@ function createReport($events) {
     }
 }
 
+
 ### Task TEST ###
 
 function runTest($filter) {
@@ -124,15 +125,42 @@ elseif ( ($mode -eq "special") -or ($mode -eq "test") ) {
     } 
 }
 
-# 1b Step. Read parameters from ini-file
+# 1b Step. Read parameters (if exsist) from ini-file and set defaults
 $inifile = Join-Path $PSScriptRoot ( $MyInvocation.MyCommand.Name.Replace("ps1", "ini") )
-if (!(Test-Path $inifile)) {
-    Write-Host ("INI-file not found '{0}'." -f $inifile) -foregroundcolor "red"
-    exit(1)
+$ini = @{}
+if (Test-Path $inifile) {
+    $ini = ConvertFrom-StringData((Get-Content $inifile) -join "`n")
 }
-$ini = ConvertFrom-StringData((Get-Content $inifile) -join "`n")
+if (!($ini.ContainsKey("LOGPATH"))) { 
+    $ini.Add("LOGPATH", $PSScriptRoot) # whereis this script
+}
+if (!($ini.ContainsKey("RPTPATH"))) { 
+    $ini.Add("RPTPATH", $PSScriptRoot) # whereis this script
+}
+if (!($ini.ContainsKey("LOGSTORETIME"))) { 
+    $ini.Add("LOGSTORETIME", 7) # One week
+}
 
-# 2. Run Task
+# 1c Step. Simple logging
+# Remove old logfiles (YYYYMMDD.log)
+Get-ChildItem $ini["LOGPATH"] | Where-Object {$_.Name -match "^\d{8}.log$"}`
+    | ? {$_.PSIsContainer -eq $false -and $_.lastwritetime -lt (get-date).adddays(-$ini["LOGSTORETIME"])}`
+    | Remove-Item -Force
+
+# Create logfile 
+$log = Join-Path $ini["LOGPATH"] ( (Get-Date).ToString('yyyyMMdd') + ".log" )
+if (!(Test-Path $log)) {
+    New-Item -type file $log -force
+}
+# and simple function for logging to screen/logfile
+function LogWrite($msg) {
+    Add-Content $log ((get-date -format HH:mm:ss) + " " + $msg)
+    Write-Output $msg
+}
+
+####
+#### 2 MAIN STEP. Run Task ###
+####
 switch ($mode) {
     "ignore"  { runIgnore($log) }
     "special" { runSpecial($filter) }
