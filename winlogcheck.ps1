@@ -28,8 +28,8 @@ function baseEventQuery($log, $depthHours) {
         WHERE LogFile = '$log' AND TimeGenerated >= '$depthEventTime'"
 }
 
-function getEvents($log, $where) {
-    $query = (baseEventQuery $log 24) + (" AND ({0})" -f $where)
+function getEvents($log, $where, $not) {
+    $query = (baseEventQuery $log $ini["DEPTHHOURS"]) + (" AND {0} ({1})" -f $not, $where)
     [wmisearcher]$wmis = $query
     try {
         $events = $wmis.Get()
@@ -104,7 +104,7 @@ function runSpecial($filter) {
         Write-Host "Special filter '$filter' not found`n" -foregroundcolor "red"
         exit(1)
     }
-    getEvents ($filter.Split('.')[0]) $where
+    getEvents -log ($filter.Split('.')[0]) -where $where -not ""
 }
 
 function runIgnore($log) {}
@@ -140,6 +140,9 @@ if (!($ini.ContainsKey("RPTPATH"))) {
 if (!($ini.ContainsKey("LOGSTORETIME"))) { 
     $ini.Add("LOGSTORETIME", 7) # One week
 }
+if (!($ini.ContainsKey("DEPTHHOURS"))) { 
+    $ini.Add("DEPTHHOURS", 24) # One week
+}
 
 # 1c Step. Simple logging
 # Remove old logfiles (YYYYMMDD.log)
@@ -150,7 +153,7 @@ Get-ChildItem $ini["LOGPATH"] | Where-Object {$_.Name -match "^\d{8}.log$"}`
 # Create logfile 
 $log = Join-Path $ini["LOGPATH"] ( (Get-Date).ToString('yyyyMMdd') + ".log" )
 if (!(Test-Path $log)) {
-    New-Item -type file $log -force
+    New-Item -type file $log -force | Out-Null
 }
 # and simple function for logging to screen/logfile
 function LogWrite($msg) {
