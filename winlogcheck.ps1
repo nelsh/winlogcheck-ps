@@ -13,6 +13,8 @@ function writeUsage($msg) {
 }
 
 
+
+
 function ignoreFilterPath($filter) {
     Join-Path (Join-Path $PSScriptRoot "ignore.conf") $filter
 }
@@ -26,7 +28,7 @@ function baseEventQuery($log, $depthHours) {
         WHERE LogFile = '$log' AND TimeGenerated >= '$depthEventTime'"
 }
 
-function createEventsReport($log, $where) {
+function getEvents($log, $where) {
     $query = (baseEventQuery $log 24) + (" AND ({0})" -f $where)
     [wmisearcher]$wmis = $query
     try {
@@ -37,6 +39,10 @@ function createEventsReport($log, $where) {
         $_.Exception.ToString()
         exit (1)
     }
+    createReport($events)
+}
+
+function createReport($events) {
     foreach ($e in $events) {
         $shortTime = [DateTime]::ParseExact($e.TimeGenerated.Split('.')[0], "yyyyMMddHHmmss", [Globalization.CultureInfo]::InvariantCulture).ToLocalTime().ToString("HH:mm:ss")
         Write-Host ("{0}`t{1}`t{2}`t{3}`t{4}`t{5}`n"`
@@ -44,7 +50,6 @@ function createEventsReport($log, $where) {
         Write-Host ("{0}`n`n" -f $e.Message)
     }
 }
-
 
 ### Task TEST ###
 
@@ -98,7 +103,7 @@ function runSpecial($filter) {
         Write-Host "Special filter '$filter' not found`n" -foregroundcolor "red"
         exit(1)
     }
-    createEventsReport ($filter.Split('.')[0]) $where
+    getEvents ($filter.Split('.')[0]) $where
 }
 
 function runIgnore($log) {}
