@@ -21,10 +21,10 @@ function specialFilterPath($filter) {
 }
 
 function makeEventQuery($log, $where) {
-    $depthEventTime = ((Get-Date).AddHours(-$ini["DEPTHHOURS"]).ToUniversalTime().ToString("yyyyMMdd HH") + ":00:00")
+    $depthEventTime = $ini["DEPTHSTRING"]
     $query = "SELECT * FROM Win32_NTLogEvent 
         WHERE LogFile = '$log' AND TimeGenerated >= '$depthEventTime'"
-    if ($where.Length -gt 0) {
+    if ([bool]$where) {
         $not = ""
         if ($mode -eq "ignore") {
             $not = " NOT "
@@ -48,13 +48,17 @@ function getEvents($log, $where) {
     }
 }
 
-function createReport($events) {
+function createReport($events, $totalevents) {
+    $report =  ("<table><caption>Filter {0}. Found {1} from {2} events.</caption>
+        <tr><th align=center>(!)</th><th>Time</th><th>Source</th><th>Category</th><th>EventID</th><th>User</th></tr>"`
+        -f $filter, $events.Length, $totalevents )
     foreach ($e in $events) {
         $shortTime = [DateTime]::ParseExact($e.TimeGenerated.Split('.')[0], "yyyyMMddHHmmss", [Globalization.CultureInfo]::InvariantCulture).ToLocalTime().ToString("HH:mm:ss")
-        Write-Host ("{0}`t{1}`t{2}`t{3}`t{4}`t{5}`n"`
-            -f $e.Type, $shortTime, $e.SourceName, $e.CategoryString, $e.EventCode, $e.UserName)
-        Write-Host ("{0}`n`n" -f $e.Message)
+        $report += ("<tr><td>{0}</td><td>{1}</td><td>{2}</td><td>{3}</td><td>{4}</td><td>{5}</td></tr><tr><td></td><td colspan=6>{6}</td><tr>"`
+            -f $e.Type, $shortTime, $e.SourceName, $e.CategoryString, $e.EventCode, $e.UserName, $e.Message)
     }
+    $report += "</table>"
+    return $report
 }
 
 
@@ -103,9 +107,15 @@ function runSpecial($filter) {
         LogWrite "Special filter '$filter' not found`n" "red"
         exit(1)
     }
-    $events = getEvents ($filter.Split('.')[0]) $where
-    if ($events.Length > 0) {
-        createReport($events)
+    $log = $filter.Split('.')[0]
+    $totalevents =  (getEvents $log).Length
+    $events = getEvents $log $where
+
+    LogWrite ("Report '{0}'. Found {1} from {2} events" `
+         -f $filter, $events.Length, $totalevents) #,Get-Item env:\Computername).Value
+
+    if ($events.Length -gt 0) {
+        Set-Content (Join-Path $ini["RPTPATH"] ($filter + ".html")) (createReport $events $totalevents) -Force
     }
 }
 
@@ -148,8 +158,10 @@ if (!($ini.ContainsKey("LOGSTORETIME"))) {
     $ini.Add("LOGSTORETIME", 7) # One week
 }
 if (!($ini.ContainsKey("DEPTHHOURS"))) { 
-    $ini.Add("DEPTHHOURS", 24) # One week
+    $ini.Add("DEPTHHOURS", 100) # One week
 }
+$ini.Add("DEPTHSTRING", ` #yyyyMMdd HH:00:00
+    ((Get-Date).AddHours(-$ini["DEPTHHOURS"]).ToUniversalTime().ToString("yyyyMMdd HH") + ":00:00"))
 
 # 1b Step. Simple logging
 # Remove old logfiles (YYYYMMDD.log)
@@ -175,10 +187,10 @@ function LogWrite($msg, $color) {
 
 Logwrite ("Start {0}`n
 Parameters:`n
-    `LOGPATH`t`t= {0}
-    `LOGSTORETIME`t= {1}
-    `RPTPATH`t`t= {2}
-    `DEPTHHOURS`t`t= {3}`n
+    `LOGPATH`t`t= {1}
+    `LOGSTORETIME`t= {2}
+    `RPTPATH`t`t= {3}
+    `DEPTHHOURS`t`t= {4}`n
     " -f $MyInvocation.MyCommand.Name, 
     $ini["LOGPATH"], $ini["LOGSTORETIME"], $ini["RPTPATH"], $ini["DEPTHHOURS"])
 
@@ -202,3 +214,5 @@ switch ($mode) {
     "special" { runSpecial($filter) }
     "test"    { runTest($filter) }
 }
+
+LogWrite ("Success")
