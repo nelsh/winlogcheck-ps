@@ -122,20 +122,28 @@ function runSpecial($filter) {
 ### Task IGNORE ###
 
 function runIgnore() {
-    foreach ($log in (Get-EventLog -List)) {
-        $logname = $log.Log
+    $ignorereport = ""
+    foreach ($l in (Get-EventLog -List)) {
+        $log = $l.Log
         $filters = @()
-        foreach ($f in (Get-ChildItem (Join-Path $PSScriptRoot "ignore.conf") -filter "$logname.*" -file)) {
+        foreach ($f in (Get-ChildItem (Join-Path $PSScriptRoot "ignore.conf") -filter "$log.*" -file)) {
             $filters += , (get-content $f.FullName) 
         }
         if ($filters.Count > 0 ) {
             $where = "(" + [system.String]::Join(") OR (", $filters) + ")"
         }
-        $events = getEvents $logname $where
-        if ($events.Length > 0) {
-            createReport($events)
+        $totalevents =  (getEvents $log).Length
+        $events = getEvents $log $where
+
+        LogWrite ("Eventlog '{0}'. Found {1} from {2} events" `
+             -f $log, $events.Length, $totalevents) #,Get-Item env:\Computername).Value
+
+        if ($events.Length -gt 0) {
+            "Create report..."
+            $ignorereport += (createReport $events $totalevents)
         }
     }
+    Set-Content (Join-Path $ini["RPTPATH"] ("ignore.html")) $ignorereport -Force
 }
 
 #
@@ -158,7 +166,7 @@ if (!($ini.ContainsKey("LOGSTORETIME"))) {
     $ini.Add("LOGSTORETIME", 7) # One week
 }
 if (!($ini.ContainsKey("DEPTHHOURS"))) { 
-    $ini.Add("DEPTHHOURS", 100) # One week
+    $ini.Add("DEPTHHOURS", 24) # One day
 }
 $ini.Add("DEPTHSTRING", ` #yyyyMMdd HH:00:00
     ((Get-Date).AddHours(-$ini["DEPTHHOURS"]).ToUniversalTime().ToString("yyyyMMdd HH") + ":00:00"))
