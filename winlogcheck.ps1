@@ -13,8 +13,6 @@ function writeUsage($msg) {
 }
 
 
-
-
 function ignoreFilterPath($filter) {
     Join-Path (Join-Path $PSScriptRoot "ignore.conf") $filter
 }
@@ -22,24 +20,32 @@ function specialFilterPath($filter) {
     Join-Path (Join-Path $PSScriptRoot "special.conf") $filter
 }
 
-function baseEventQuery($log, $depthHours) {
-    $depthEventTime = ((Get-Date).AddHours(-$depthHours).ToUniversalTime().ToString("yyyyMMdd HH") + ":00:00")
-    "SELECT * FROM Win32_NTLogEvent 
+function makeEventQuery($log, $where) {
+    $depthEventTime = ((Get-Date).AddHours(-$ini["DEPTHHOURS"]).ToUniversalTime().ToString("yyyyMMdd HH") + ":00:00")
+    $query = "SELECT * FROM Win32_NTLogEvent 
         WHERE LogFile = '$log' AND TimeGenerated >= '$depthEventTime'"
+    if ($where.Length -gt 0) {
+        $not = ""
+        if ($mode -eq "ignore") {
+            $not = " NOT "
+        }
+        $query += " AND $not ( $where )"
+    }
+    return $query
 }
 
-function getEvents($log, $where, $not) {
-    $query = (baseEventQuery $log $ini["DEPTHHOURS"]) + (" AND {0} ({1})" -f $not, $where)
+
+function getEvents($log, $where) {
+    $query = makeEventQuery $log $where
     [wmisearcher]$wmis = $query
     try {
-        $events = $wmis.Get()
+        return $wmis.Get()
     } catch {
         Write-Host "$msg : failed.`nQuery: $query`n" -foregroundcolor "red"
         "Exception:`n"
         $_.Exception.ToString()
         exit (1)
     }
-    createReport($events)
 }
 
 function createReport($events) {
@@ -73,15 +79,14 @@ function runTest($filter) {
     }
     $log =  $filter.Split('.')[0]
     $msg = "Test filter='$filter' in '$filterin' for log='$log'"
-    if ( (Get-EventLog -List | Where-Object {$_.Log -eq $log}).Length -eq 0) {
+    if ( (Get-EventLog -List | Where-Object {$_.Log -eq $log} ).Length -eq 0) {
         Write-Host "$msg : failed. Log '$log' not found`n" -foregroundcolor "red"
         exit (1)
         
     }
-    $query = (baseEventQuery $log 24) + (" AND ({0})" -f $where)
-    [wmisearcher]$wmis = $query
+    $query = makeEventQuery $log $where
     try {
-        $wmis.Get().Lenght
+        (getEvents  $log $where).Lenght
         Write-Host "$msg : OK`n" -foregroundcolor "green"
         "Query:  $query"
     } catch {
@@ -104,10 +109,30 @@ function runSpecial($filter) {
         Write-Host "Special filter '$filter' not found`n" -foregroundcolor "red"
         exit(1)
     }
-    getEvents -log ($filter.Split('.')[0]) -where $where -not ""
+    $events = getEvents ($filter.Split('.')[0]) $where
+    if ($events.Length > 0) {
+        createReport($events)
+    }
 }
 
-function runIgnore($log) {}
+### Task IGNORE ###
+
+function runIgnore($log) {
+    foreach ($log in (Get-EventLog -List)) {
+        $logname = $log.Log
+        $filters = @()
+        foreach ($f in (Get-ChildItem (Join-Path $PSScriptRoot "ignore.conf") -filter "$logname.*" -file)) {
+            $filters += , (get-content $f.FullName) 
+        }
+        if ($filters.Count > 0 ) {
+            $where = "(" + [system.String]::Join(") OR (", $filters) + ")"
+        }
+        $events = getEvents $logname $where
+        if ($events.Length > 0) {
+            createReport($events)
+        }
+    }
+}
 
 #
 # MAIN PROCEDURE
