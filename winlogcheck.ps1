@@ -48,14 +48,21 @@ function getEvents($log, $where) {
     }
 }
 
-function createReport($events, $totalevents) {
-    $report =  ("<table><caption>Filter {0}. Found {1} from {2} events.</caption>
-        <tr><th align=center>(!)</th><th>Time</th><th>Source</th><th>Category</th><th>EventID</th><th>User</th></tr>"`
-        -f $filter, $events.Length, $totalevents )
+function createReport($events, $totalevents, $log, $filterscount) {
+    $tablehead ="<table><caption align=left>{0}. Found {1} from {2} events.</caption>
+        <tr><th width=100>(!)</th><th width=100>Time</th><th width=50>EventID</th><th>Source/Category</th><th width=200>User</th></tr>" 
+    $report = "" 
+    LogWrite ("Log = $log")
+    if ($mode -ne "ignore") {
+        $report = ($tablehead -f ("Report '" + $filter + "'"), $events.Length, $totalevents )
+    }
+    else {
+        $report = ($tablehead -f ($log.ToUpper() + ". Use " + $filterscount), $events.Length, $totalevents )
+    }
     foreach ($e in $events) {
         $shortTime = [DateTime]::ParseExact($e.TimeGenerated.Split('.')[0], "yyyyMMddHHmmss", [Globalization.CultureInfo]::InvariantCulture).ToLocalTime().ToString("HH:mm:ss")
-        $report += ("<tr><td>{0}</td><td>{1}</td><td>{2}</td><td>{3}</td><td>{4}</td><td>{5}</td></tr><tr><td></td><td colspan=6>{6}</td><tr>"`
-            -f $e.Type, $shortTime, $e.SourceName, $e.CategoryString, $e.EventCode, $e.UserName, $e.Message)
+        $report += ("<tr><td>{0}</td><td>{1}</td><td align=right>{2}</td><td>{3}/{4}</td><td>{5}</td></tr><tr><td></td><td colspan=6>{6}</td><tr>"`
+            -f $e.Type, $shortTime, $e.EventCode, $e.SourceName, $e.CategoryString, $e.UserName, $e.Message)
     }
     $report += "</table>"
     return $report
@@ -129,19 +136,20 @@ function runIgnore() {
         foreach ($f in (Get-ChildItem (Join-Path $PSScriptRoot "ignore.conf") -filter "$log.*" -file)) {
             $filters += , (get-content $f.FullName) 
         }
-        if ($filters.Count > 0 ) {
+        if ($filters.Count -gt 0 ) {
             $where = "(" + [system.String]::Join(") OR (", $filters) + ")"
+        }
+        else {
+            $where = ""
         }
         $totalevents =  (getEvents $log).Length
         $events = getEvents $log $where
-
         LogWrite ("Eventlog '{0}'. Found {1} from {2} events" `
              -f $log, $events.Length, $totalevents) #,Get-Item env:\Computername).Value
 
-        if ($events.Length -gt 0) {
-            "Create report..."
-            $ignorereport += (createReport $events $totalevents)
-        }
+#        if ($events.Length -gt 0) {
+            $ignorereport += (createReport $events $totalevents $log $filters.Count)
+#        }
     }
     Set-Content (Join-Path $ini["RPTPATH"] ("ignore.html")) $ignorereport -Force
 }
