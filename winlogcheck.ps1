@@ -49,20 +49,33 @@ function getEvents($log, $where) {
 }
 
 function createReport($events, $totalevents, $log, $filterscount) {
-    $tablehead ="<table><caption align=left>{0}. Found {1} from {2} events.</caption>
-        <tr><th width=100>(!)</th><th width=100>Time</th><th width=50>EventID</th><th>Source/Category</th><th width=200>User</th></tr>" 
+    $tablehead ="<table><caption style='text-align: left; background:#D9EDF7'>{0}. Found {1} from {2} events.</caption>
+        <tr><th width=50>(!)</th><th width=60>Time</th><th width=40>EventID</th><th align=left>Source/Category</th><th align=left width=150>User</th></tr>" 
     $report = "" 
-    LogWrite ("Log = $log")
     if ($mode -ne "ignore") {
         $report = ($tablehead -f ("Report '" + $filter + "'"), $events.Length, $totalevents )
     }
     else {
-        $report = ($tablehead -f ($log.ToUpper() + ". Use " + $filterscount), $events.Length, $totalevents )
+        $report = ($tablehead -f ($log.ToUpper() + ". Use " + $filterscount + " filter(s)"), $events.Length, $totalevents )
     }
     foreach ($e in $events) {
+        $bg = "#F7F7F9"
+        $level = "?"
+        switch ($e.Type) {
+            "information"   { $bg = "#DFF0D8" ; $level = "INFO" }
+            "warning"       { $bg = "#FCF8E3" ; $level = "WARN" }
+            "error"         { $bg = "#F2DEDE" ; $level = "ERRO" }
+            "Audit Failure" { $bg = "#F2DEDE" ; $level = "FAIL" }
+        }
         $shortTime = [DateTime]::ParseExact($e.TimeGenerated.Split('.')[0], "yyyyMMddHHmmss", [Globalization.CultureInfo]::InvariantCulture).ToLocalTime().ToString("HH:mm:ss")
-        $report += ("<tr><td>{0}</td><td>{1}</td><td align=right>{2}</td><td>{3}/{4}</td><td>{5}</td></tr><tr><td></td><td colspan=6>{6}</td><tr>"`
-            -f $e.Type, $shortTime, $e.EventCode, $e.SourceName, $e.CategoryString, $e.UserName, $e.Message)
+        if ([bool]$e.Message) {
+            $message = $e.Message.Replace("`r`n", "<br>")
+        }
+        else {
+            $message = "null"
+        }
+        $report += ("<tr style='text-align: left; background:{0}'><td>{1}</td><td>{2}</td><td align=right>{3}</td><td>{4}/{5}</td><td>{6}</td></tr><tr><td></td><td colspan=6>{7}</td><tr>"`
+            -f $bg, $level, $shortTime, $e.EventCode, $e.SourceName, $e.CategoryString, $e.UserName, $message)
     }
     $report += "</table>"
     return $report
