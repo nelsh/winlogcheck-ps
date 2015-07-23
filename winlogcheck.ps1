@@ -1,5 +1,5 @@
 ﻿[CmdletBinding()]
-Param($mode,$log,$filter)
+Param($mode,$filter)
 
 # Print usage information
 function writeUsage($msg) {
@@ -11,7 +11,6 @@ function writeUsage($msg) {
     `$scriptname -mode special -filter <filter_name>`n
     `$scriptname -mode test -filter <filter_name>`n`n"
 }
-
 
 function ignoreFilterPath($filter) {
     Join-Path (Join-Path $PSScriptRoot "ignore.conf") $filter
@@ -49,8 +48,7 @@ function getEvents($log, $where) {
 }
 
 function createReport($events, $totalevents, $log, $filterscount) {
-    $tablehead ="<table><caption style='text-align: left; background:#D9EDF7'>{0}. Found {1} from {2} events.</caption>
-        <tr><th width=50>(!)</th><th width=60>Time</th><th width=40>EventID</th><th align=left>Source/Category</th><th align=left width=150>User</th></tr>" 
+    $tablehead = "<table width=100%><caption style='text-align: left; background:#D9EDF7'>{0}. Found {1} from {2} events.</caption>"
     $report = "" 
     if ($mode -ne "ignore") {
         $report = ($tablehead -f ("Report '" + $filter + "'"), $events.Length, $totalevents )
@@ -58,21 +56,45 @@ function createReport($events, $totalevents, $log, $filterscount) {
     else {
         $report = ($tablehead -f ($log.ToUpper() + ". Use " + $filterscount + " filter(s)"), $events.Length, $totalevents )
     }
+    if ($events.Length -eq 0) {
+        return ($report + "</table>")
+    }
+    $report += "<tr><th width=50>(!)</th><th width=60>Time</th><th width=40>EventID</th><th align=left>Source/Category</th><th align=left width=150>User</th></tr>"
     foreach ($e in $events) {
         $bg = "#F7F7F9"
-        $level = "?"
+        $level = $e.Type
         switch ($e.Type) {
-            "information"   { $bg = "#DFF0D8" ; $level = "INFO" }
-            "warning"       { $bg = "#FCF8E3" ; $level = "WARN" }
-            "error"         { $bg = "#F2DEDE" ; $level = "ERRO" }
-            "Audit Failure" { $bg = "#F2DEDE" ; $level = "FAIL" }
+            "information"   { $bg = "#DFF0D8" ; $level = "INFO"; $totals["foundother"]++ }
+            "warning"       { $bg = "#FCF8E3" ; $level = "WARN"; $totals["foundwarnings"]++ }
+            "error"         { $bg = "#F2DEDE" ; $level = "ERRO"; $totals["founderrors"]++ }
+            "Audit Success" { $bg = "#DFF0D8" ; $level = "SUCC"; $totals["foundother"]++ }
+            "Audit Failure" { $bg = "#F2DEDE" ; $level = "FAIL"; $totals["founderrors"]++ }
         }
         $shortTime = [DateTime]::ParseExact($e.TimeGenerated.Split('.')[0], "yyyyMMddHHmmss", [Globalization.CultureInfo]::InvariantCulture).ToLocalTime().ToString("HH:mm:ss")
+        $message = ""
         if ([bool]$e.Message) {
-            $message = $e.Message.Replace("`r`n", "<br>")
+            if ($log -ne "security") {
+                $message = $e.Message.Replace("`r`n", "<br>")
+            }
+            else {
+                $i = 1
+                $a = @()
+                foreach ($s in $e.Message.Replace("`r`n`r`n", "~").Split("~")) {
+                    if ($i -eq 1) {
+                        $a += , $s
+                    }
+                    elseif ($s.Contains("Account For Which Logon Failed:")`
+                         -or $s.Contains("Failure Information:")`
+                         -or $s.Contains("Network Information:") ) {
+                        $a += , $s
+                    }
+                    $i++
+                }
+                $message = ($a -join "<br>")
+            }
         }
         else {
-            $message = "null"
+            $message = ("The following information was included with the event: " + $e.InsertionStrings)
         }
         $report += ("<tr style='text-align: left; background:{0}'><td>{1}</td><td>{2}</td><td align=right>{3}</td><td>{4}/{5}</td><td>{6}</td></tr><tr><td></td><td colspan=6>{7}</td><tr>"`
             -f $bg, $level, $shortTime, $e.EventCode, $e.SourceName, $e.CategoryString, $e.UserName, $message)
@@ -81,6 +103,27 @@ function createReport($events, $totalevents, $log, $filterscount) {
     return $report
 }
 
+function Send-Mail ($subj, $body) {
+    $msg = New-Object Net.Mail.MailMessage($ini["MAILADDRESS"], $ini["MAILADDRESS"])
+    $msg.IsBodyHtml = $true
+    $msg.Subject = $subj
+    $msg.Body = $body
+    $smtp = New-Object Net.Mail.SmtpClient("")
+    if ($ini["MAILSERVER"].Contains(":")) {
+        $mailserver = $ini["MAILSERVER"].Split(":")
+        $smtp.Host = $mailserver[0]
+        $smtp.Port = $mailserver[1]
+    }
+    else {
+        $smtp.Host = $ini["MAILSERVER"]
+    }
+    #$smtp.EnableSsl = $true 
+    if ($ini.ContainsKey("MAILUSER") -and $ini.ContainsKey("MAILPASSWORD"))  {
+        $smtp.Credentials = New-Object System.Net.NetworkCredential($ini["MAILUSER"], $ini["MAILPASSWORD"]); 
+    }
+    $smtp.Send($msg)
+    LogWrite("... sent summary")
+}
 
 ### Task TEST ###
 
@@ -128,14 +171,25 @@ function runSpecial($filter) {
         exit(1)
     }
     $log = $filter.Split('.')[0]
-    $totalevents =  (getEvents $log).Length
+    $totals["allevents"] =  (getEvents $log).Length
     $events = getEvents $log $where
 
     LogWrite ("Report '{0}'. Found {1} from {2} events" `
          -f $filter, $events.Length, $totalevents) #,Get-Item env:\Computername).Value
 
-    if ($events.Length -gt 0) {
-        Set-Content (Join-Path $ini["RPTPATH"] ($filter + ".html")) (createReport $events $totalevents) -Force
+#    if ($events.Length -gt 0) {
+        $specialreport = (createReport $events $totalevents $log)
+        Set-Content (Join-Path $ini["RPTPATH"] ($filter + ".html")) $specialreport -Force
+#    }
+    if ([bool]$ini["MAILSEND"])  {
+        $subj = "Winlogcheck "`
+             + (Get-Item env:\Computername).Value`
+             + " report '" + $filter + "': "`
+             + "(errors=" + $totals["founderrors"].ToString()`
+             + ", warnings=" + $totals["foundwarnings"].ToString()`
+             + ", other=" + $totals["foundother"].ToString() + ")"`
+             + " total " + $totals["allevents"] + " events"
+        Send-Mail $subj $specialreport
     }
 }
 
@@ -157,14 +211,24 @@ function runIgnore() {
         }
         $totalevents =  (getEvents $log).Length
         $events = getEvents $log $where
-        LogWrite ("Eventlog '{0}'. Found {1} from {2} events" `
-             -f $log, $events.Length, $totalevents) #,Get-Item env:\Computername).Value
 
-#        if ($events.Length -gt 0) {
-            $ignorereport += (createReport $events $totalevents $log $filters.Count)
-#        }
+        LogWrite ("Eventlog '{0}'. Found {1} from {2} events" `
+             -f $log, $events.Length, $totalevents)
+        $totals["allevents"] += $totalevents
+
+        $ignorereport += (createReport $events $totalevents $log $filters.Count)
     }
     Set-Content (Join-Path $ini["RPTPATH"] ("ignore.html")) $ignorereport -Force
+    if ([bool]$ini["MAILSEND"])  {
+        $subj = "Winlogcheck "`
+             + (Get-Item env:\Computername).Value + ": "`
+             + "(errors=" + $totals["founderrors"].ToString()`
+             + ", warnings=" + $totals["foundwarnings"].ToString()`
+             + ", other=" + $totals["foundother"].ToString() + ")"`
+             + " total " + $totals["allevents"].ToString() + " events"`
+             + " in " + (Get-EventLog -List).Length.ToString() + " logs"
+        Send-Mail $subj $ignorereport
+    }
 }
 
 #
@@ -191,6 +255,10 @@ if (!($ini.ContainsKey("DEPTHHOURS"))) {
 }
 $ini.Add("DEPTHSTRING", ` #yyyyMMdd HH:00:00
     ((Get-Date).AddHours(-$ini["DEPTHHOURS"]).ToUniversalTime().ToString("yyyyMMdd HH") + ":00:00"))
+if ($ini.ContainsKey("MAILADDRESS") -and $ini.ContainsKey("MAILSERVER"))  {
+    $ini.Add("MAILSEND", $true) # One day
+}
+
 
 # 1b Step. Simple logging
 # Remove old logfiles (YYYYMMDD.log)
@@ -238,6 +306,12 @@ elseif ( ($mode -eq "special") -or ($mode -eq "test") ) {
 ####
 #### 2 MAIN STEP. Run Task ###
 ####
+$totals = @{
+    "allevents" = 0
+    "founderrors" = 0
+    "foundwarnings" = 0
+    "foundother" = 0
+    }
 switch ($mode) {
     "ignore"  { runIgnore }
     "special" { runSpecial($filter) }
