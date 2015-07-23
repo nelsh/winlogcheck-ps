@@ -1,0 +1,6 @@
+# real ini-file
+winlogcheck.ini
+# log files
+*.log
+# report files
+*.html
