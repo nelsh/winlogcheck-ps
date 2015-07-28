@@ -48,9 +48,7 @@ function getEvents($log, $where) {
 }
 
 function createReport($events, $totalevents, $log, $filterscount) {
-    $tablehead = "<table width=100% style='margin-bottom:1em'><caption `
-        style='text-align: left; background:#f0f0f0; padding:0.5em 0.25em; border-top: 2px solid #bbb;border-bottom: 1px solid #ccc;'>`
-        {0}. Found {1} from {2} events.</caption>"
+    $tablehead = "<table><caption>{0}. Found {1} from {2} events.</caption>"
     $report = "" 
     if ($mode -ne "ignore") {
         $report = ($tablehead -f ("Report '" + $filter + "'"), $events.Length, $totalevents )
@@ -98,8 +96,8 @@ function createReport($events, $totalevents, $log, $filterscount) {
         else {
             $message = ("The following information was included with the event: " + $e.InsertionStrings)
         }
-        $report += ("<tr style='text-align: left; background:{0}'><td>{1}</td><td>{2}</td><td align=right>{3}</td><td>{4}/{5}</td><td>{6}</td></tr><tr><td></td><td colspan=6>{7}</td><tr>"`
-            -f $bg, $level, $shortTime, $e.EventCode, $e.SourceName, $e.CategoryString, $e.UserName, $message)
+        $report += ("<tr class='{0}'><td>{1}</td><td>{2}</td><td align=right>{3}</td><td>{4}/{5}</td><td>{6}</td></tr><tr><td></td><td colspan=6>{7}</td><tr>"`
+            -f $level, $level, $shortTime, $e.EventCode, $e.SourceName, $e.CategoryString, $e.UserName, $message)
     }
     $report += "</table>"
     return $report
@@ -198,7 +196,7 @@ function runSpecial($filter) {
 ### Task IGNORE ###
 
 function runIgnore() {
-    $ignorereport = ""
+    $ignorereport = $ini["STYLE"]
     foreach ($l in (Get-EventLog -List)) {
         $log = $l.Log
         $filters = @()
@@ -257,6 +255,17 @@ if (!($ini.ContainsKey("DEPTHHOURS"))) {
 }
 $ini.Add("DEPTHSTRING", ` #yyyyMMdd HH:00:00
     ((Get-Date).AddHours(-$ini["DEPTHHOURS"]).ToUniversalTime().ToString("yyyyMMdd HH") + ":00:00"))
+if (!($ini.ContainsKey("STYLE"))) {
+    $defaultStyle = "<style>
+        table { width: 100%; margin-bottom:1em; border-bottom: 1px solid #ccc; }
+        caption { text-align: left; background:#f0f0f0; padding:0.5em 0.25em; 
+            border-top: 2px solid #bbb;border-bottom: 1px solid #ccc; }
+        tr.INFO td, tr.SUCC td {border-top: 1px solid #ccc; background:#D9EDF7 }
+        tr.ERRO td, tr.FAIL td {border-top: 1px solid #ccc; background:#F2DEDE }
+        tr.WARN td             {border-top: 1px solid #ccc; background:#FCF8E3 }
+    </style>" 
+    $ini.Add("STYLE", $defaultStyle) 
+}
 if ($ini.ContainsKey("MAILADDRESS") -and $ini.ContainsKey("MAILSERVER"))  {
     $ini.Add("MAILSEND", $true) # One day
 }
