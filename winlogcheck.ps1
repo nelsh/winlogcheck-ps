@@ -48,7 +48,9 @@ function getEvents($log, $where) {
 }
 
 function createReport($events, $totalevents, $log, $filterscount) {
-    $tablehead = "<table width=100%><caption style='text-align: left; background:#D9EDF7'>{0}. Found {1} from {2} events.</caption>"
+    $tablehead = "<table width=100% style='margin-bottom:1em'><caption `
+        style='text-align: left; background:#f0f0f0; padding:0.5em 0.25em; border-top: 2px solid #bbb;border-bottom: 1px solid #ccc;'>`
+        {0}. Found {1} from {2} events.</caption>"
     $report = "" 
     if ($mode -ne "ignore") {
         $report = ($tablehead -f ("Report '" + $filter + "'"), $events.Length, $totalevents )
@@ -64,10 +66,10 @@ function createReport($events, $totalevents, $log, $filterscount) {
         $bg = "#F7F7F9"
         $level = $e.Type
         switch ($e.Type) {
-            "information"   { $bg = "#DFF0D8" ; $level = "INFO"; $totals["foundother"]++ }
+            "information"   { $bg = "#D9EDF7" ; $level = "INFO"; $totals["foundother"]++ }
             "warning"       { $bg = "#FCF8E3" ; $level = "WARN"; $totals["foundwarnings"]++ }
             "error"         { $bg = "#F2DEDE" ; $level = "ERRO"; $totals["founderrors"]++ }
-            "Audit Success" { $bg = "#DFF0D8" ; $level = "SUCC"; $totals["foundother"]++ }
+            "Audit Success" { $bg = "#D9EDF7" ; $level = "SUCC"; $totals["foundother"]++ }
             "Audit Failure" { $bg = "#F2DEDE" ; $level = "FAIL"; $totals["founderrors"]++ }
         }
         $shortTime = [DateTime]::ParseExact($e.TimeGenerated.Split('.')[0], "yyyyMMddHHmmss", [Globalization.CultureInfo]::InvariantCulture).ToLocalTime().ToString("HH:mm:ss")
@@ -134,12 +136,12 @@ function runTest($filter) {
     $where = ""
     $filterin = ""
     if (Test-Path $ignoreFilterPath) {
-        $where = Get-Content $ignoreFilterPath
+        $where = (Get-Content $ignoreFilterPath) -join "`n"
         $filterin = "ignore"
         LogWrite("Filter found: '$ignoreFilterPath'")
     }
     elseif (Test-Path $specialFilterPath) {
-        $where = Get-Content $specialFilterPath
+        $where = (Get-Content $specialFilterPath) -join "`n"
         $filterin = "special"
         LogWrite("Filter found: '$specialFilterPath'")
     }
@@ -164,7 +166,7 @@ function runTest($filter) {
 function runSpecial($filter) {
     $specialFilterPath = specialFilterPath($filter)
     if (Test-Path $specialFilterPath) {
-        $where = Get-Content $specialFilterPath
+        $where = (Get-Content $specialFilterPath) -join "`n"
     }
     else {
         LogWrite "Special filter '$filter' not found`n" "red"
@@ -201,7 +203,7 @@ function runIgnore() {
         $log = $l.Log
         $filters = @()
         foreach ($f in (Get-ChildItem (Join-Path $PSScriptRoot "ignore.conf") -filter "$log.*" -file)) {
-            $filters += , (get-content $f.FullName) 
+            $filters += , ((get-content $f.FullName) -join "`n")
         }
         if ($filters.Count -gt 0 ) {
             $where = "(" + [system.String]::Join(") OR (", $filters) + ")"
