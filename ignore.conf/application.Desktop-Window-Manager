@@ -1,0 +1,1 @@
+SourceName = 'Desktop Window Manager' AND ( EventCode = 9003 OR EventCode = 9009 )

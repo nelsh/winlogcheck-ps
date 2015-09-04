@@ -1,0 +1,1 @@
+SourceName = 'Microsoft-Windows-Kernel-General' AND EventCode = 16 AND Message LIKE 'The access history in hive%'

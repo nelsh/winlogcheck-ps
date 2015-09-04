@@ -1,0 +1,1 @@
+SourceName = 'Microsoft-Windows-Winlogon' AND ( EventCode = 7001 OR EventCode = 7002 )

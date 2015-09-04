@@ -1,0 +1,1 @@
+﻿SourceName = 'NTDS ISAM' AND ( EventCode = 700 OR EventCode = 701 )

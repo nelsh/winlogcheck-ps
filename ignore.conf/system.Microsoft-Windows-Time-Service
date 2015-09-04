@@ -1,0 +1,1 @@
+SourceName = 'Microsoft-Windows-Time-Service' AND ( EventCode = 35 OR EventCode = 37 )

@@ -1,0 +1,1 @@
+SourceName='PowerShell' AND (EventCode=400 OR EventCode=403 OR EventCode=600 OR EventCode=601)

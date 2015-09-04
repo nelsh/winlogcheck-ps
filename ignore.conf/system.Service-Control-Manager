@@ -1,0 +1,18 @@
+SourceName = 'Service Control Manager' AND (EventCode = 7036 OR EventCode = 7040) 
+AND (
+	Message LIKE '%Application Informat%'	OR 
+	Message LIKE '%Application Experience%'	OR 
+	Message LIKE '%Background Intelligent%'	OR 
+	Message LIKE '%Diagnostic System Host%'	OR 
+	Message LIKE '%DNS Client%'		OR 
+	Message LIKE '%Microsoft Software Sha%'	OR 
+	Message LIKE '%Optimize drives%'	OR 
+	Message LIKE '%Portable Device Enum%'	OR 
+	Message LIKE '%Remote Registry%'	OR 
+	Message LIKE '%Shell Hardware Detect%'	OR 
+	Message LIKE '%Volume Shadow Copy%'	OR 
+	Message LIKE '%Windows Modules Inst%'	OR 
+	Message LIKE '%Windows Time service%'	OR 
+	Message LIKE '%Windows Update%'		OR 
+	Message LIKE '%WinHTTP%'	
+)

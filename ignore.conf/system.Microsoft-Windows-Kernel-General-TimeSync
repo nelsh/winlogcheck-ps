@@ -1,0 +1,1 @@
+SourceName = 'Microsoft-Windows-Kernel-General' AND EventCode = 1 AND Message LIKE '%system time has changed to%'
