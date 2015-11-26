@@ -33,7 +33,6 @@ function makeEventQuery($log, $where) {
     return $query
 }
 
-
 function getEvents($log, $where) {
     $query = makeEventQuery $log $where
     LogWrite("Run query: $query")
@@ -48,7 +47,10 @@ function getEvents($log, $where) {
 }
 
 function createReport($events, $totalevents, $log, $filterscount) {
-    $tablehead = "<table><caption>{0}. Found {1} from {2} events.</caption>"
+    $tablehead = "<table style='width: 100%; margin-bottom:1em; border-bottom: 1px solid #ccc;'>
+        <caption style='text-align: left; background:#f0f0f0; padding:0.5em 0.25em; 
+            border-top: 2px solid #bbb;border-bottom: 1px solid #ccc;'>
+        {0}. Found {1} from {2} events.</caption>"
     $report = "" 
     if ($mode -ne "ignore") {
         $report = ($tablehead -f ("Report '" + $filter + "'"), $events.Length, $totalevents )
@@ -57,7 +59,7 @@ function createReport($events, $totalevents, $log, $filterscount) {
         $report = ($tablehead -f ($log.ToUpper() + ". Use " + $filterscount + " filter(s)"), $events.Length, $totalevents )
     }
     if ($events.Length -eq 0) {
-        return ($report + "</table>")
+        return ($report + "</table><br>")
     }
     $report += "<tr><th width=50>(!)</th><th width=60>Time</th><th width=40>EventID</th><th align=left>Source/Category</th><th align=left width=150>User</th></tr>"
     foreach ($e in $events) {
@@ -73,34 +75,72 @@ function createReport($events, $totalevents, $log, $filterscount) {
         $shortTime = [DateTime]::ParseExact($e.TimeGenerated.Split('.')[0], "yyyyMMddHHmmss", [Globalization.CultureInfo]::InvariantCulture).ToLocalTime().ToString("HH:mm:ss")
         $message = ""
         if ([bool]$e.Message) {
-            if ($log -ne "security") {
-                $message = $e.Message.Replace("`r`n", "<br>")
+            if ($log -eq "security") {
+                $message = formatSecEventMsg($e.Message)
             }
             else {
-                $i = 1
-                $a = @()
-                foreach ($s in $e.Message.Replace("`r`n`r`n", "~").Split("~")) {
-                    if ($i -eq 1) {
-                        $a += , $s
-                    }
-                    elseif ($s.Contains("Account For Which Logon Failed:")`
-                         -or $s.Contains("Failure Information:")`
-                         -or $s.Contains("Network Information:") ) {
-                        $a += , $s
-                    }
-                    $i++
+                if ($e.CategoryString -eq "Web Event" -or $e.EventCode -eq 1309) {
+                    $message = formatWebEventMsg($e.Message)
                 }
-                $message = ($a -join "<br>")
+                else {
+                    $message = $e.Message.Replace("`r`n", "<br>")
+                }
             }
         }
         else {
             $message = ("The following information was included with the event: " + $e.InsertionStrings)
         }
-        $report += ("<tr class='{0}'><td>{1}</td><td>{2}</td><td align=right>{3}</td><td>{4}/{5}</td><td>{6}</td></tr><tr><td></td><td colspan=6>{7}</td><tr>"`
-            -f $level, $level, $shortTime, $e.EventCode, $e.SourceName, $e.CategoryString, $e.UserName, $message)
+        $report += ("<tr style='background:{0}'><td>{1}</td><td>{2}</td><td align=right>{3}</td><td>{4}/{5}</td><td>{6}</td></tr><tr><td></td>`r`n<td colspan=6>{7}</td><tr>"`
+            -f $bg, $level, $shortTime, $e.EventCode, $e.SourceName, $e.CategoryString, $e.UserName, $message)
     }
-    $report += "</table>"
+    $report += "</table><br>"
     return $report
+}
+
+function formatSecEventMsg ($message) {
+    $i = 1
+    $a = @()
+    foreach ($s in $message.Replace("`r`n`r`n", "~").Split("~")) {
+        if ($i -eq 1) {
+            $a += , $s
+        }
+        elseif ($s.Contains("Account For Which Logon Failed:")`
+            -or $s.Contains("Failure Information:")`
+            -or $s.Contains("Network Information:") ) {
+            $a += , $s
+        }
+        $i++
+    }
+    return ($a -join "<br>")
+}
+
+function formatWebEventMsg ($message) {
+    Add-Type -AssemblyName System.Web
+    $excInfo = ""
+    $reqInfo = ""
+    foreach ($s in $message.Replace(" `r `r", "~").Split("~")) {
+        if ($s.StartsWith("Exception information:")) {
+            foreach ($ss in $s.Replace(" `r    ", "~").Split("~")) {
+                if ($ss.StartsWith("Exception message:") ) {
+                    #foreach ($sss in $ss.Replace("`n   ", "~").Split("~")) {
+                    #    $excInfo += ( $sss + "<br>`r`n" )
+                    #}
+                    $sss = $ss.Replace("`r", "").Replace("`n   ", "~").Split("~")
+                    $excInfo += ( $sss[0] + "<br>`r`n")
+                    $excInfo += ("<small>" + ($sss -join "<br>") + "</small>")
+                }
+            }
+        }
+        elseif ($s.StartsWith("Request information:")) {
+            foreach ($ss in $s.Replace(" `r    ", "~").Split("~")) {
+                if ($ss.StartsWith("Request URL:")`
+                    -or $ss.StartsWith("User host address:") ) {
+                    $reqInfo += ( [System.Web.HttpUtility]::HtmlEncode($ss) + "<br>`r`n" )
+                }
+            }
+        }
+    }
+    return ($reqInfo + $excInfo)
 }
 
 function Send-Mail ($subj, $body) {
@@ -196,7 +236,7 @@ function runSpecial($filter) {
 ### Task IGNORE ###
 
 function runIgnore() {
-    $ignorereport = $ini["STYLE"]
+    $ignorereport = ""
     foreach ($l in (Get-EventLog -List)) {
         $log = $l.Log
         $filters = @()
@@ -255,17 +295,6 @@ if (!($ini.ContainsKey("DEPTHHOURS"))) {
 }
 $ini.Add("DEPTHSTRING", ` #yyyyMMdd HH:00:00
     ((Get-Date).AddHours(-$ini["DEPTHHOURS"]).ToUniversalTime().ToString("yyyyMMdd HH") + ":00:00"))
-if (!($ini.ContainsKey("STYLE"))) {
-    $defaultStyle = "<style>
-        table { width: 100%; margin-bottom:1em; border-bottom: 1px solid #ccc; }
-        caption { text-align: left; background:#f0f0f0; padding:0.5em 0.25em; 
-            border-top: 2px solid #bbb;border-bottom: 1px solid #ccc; }
-        tr.INFO td, tr.SUCC td {border-top: 1px solid #ccc; background:#D9EDF7 }
-        tr.ERRO td, tr.FAIL td {border-top: 1px solid #ccc; background:#F2DEDE }
-        tr.WARN td             {border-top: 1px solid #ccc; background:#FCF8E3 }
-    </style>" 
-    $ini.Add("STYLE", $defaultStyle) 
-}
 if ($ini.ContainsKey("MAILADDRESS") -and $ini.ContainsKey("MAILSERVER"))  {
     $ini.Add("MAILSEND", $true) # One day
 }
