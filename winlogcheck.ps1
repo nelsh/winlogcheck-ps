@@ -37,6 +37,7 @@ function getEvents($log, $where) {
     $query = makeEventQuery $log $where
     LogWrite("Run query: $query")
     [wmisearcher]$wmis = $query
+    $wmis.psbase.options.timeout = (New-Timespan -Minutes 30)
     try {
         return $wmis.Get()
     } catch {
