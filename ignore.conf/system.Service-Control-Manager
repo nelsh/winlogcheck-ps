@@ -8,12 +8,16 @@ AND (
 	Message LIKE '%Microsoft Software Sha%'	OR 
 	Message LIKE '%Optimize drives%'	OR 
 	Message LIKE '%Portable Device Enum%'	OR 
+	Message LIKE '%Problem Reports and%'	OR 
 	Message LIKE '%Remote Registry%'	OR 
 	Message LIKE '%Shell Hardware Detect%'	OR 
+	Message LIKE '%Smart Card Device Enum%'	OR 
+	Message LIKE '%Software Protection%'	OR 
 	Message LIKE '%Volume Shadow Copy%'	OR 
 	Message LIKE '%Windows Modules Inst%'	OR 
-	Message LIKE '%Windows Error Report%'	OR 
+	Message LIKE '%Windows Error Reportin%' OR 
 	Message LIKE '%Windows Time service%'	OR 
 	Message LIKE '%Windows Update%'		OR 
-	Message LIKE '%WinHTTP%'	
+	Message LIKE '%WinHTTP%'		OR
+	Message LIKE '%WMI Performance Adapter%'
 )
