@@ -1,5 +1,5 @@
 ﻿[CmdletBinding()]
-Param($mode,$filter)
+Param($mode,$filterpath)
 
 # Print usage information
 function writeUsage($msg) {
@@ -8,15 +8,18 @@ function writeUsage($msg) {
     "Winlogcheck (or Logcheck for Windows)`n
     `Usage:`n
     `$scriptname -mode ignore`n
-    `$scriptname -mode special -filter <filter_name>`n
-    `$scriptname -mode test -filter <filter_name>`n`n"
+    `$scriptname -mode special -filterpath <absolute_or_relative_filter_path>`n
+    `$scriptname -mode test -filterpath <absolute_or_relative_filter_path>`n`n"
 }
 
 function ignoreFilterPath($filter) {
     Join-Path (Join-Path $PSScriptRoot "ignore.conf") $filter
 }
-function specialFilterPath($filter) {
-    Join-Path (Join-Path $PSScriptRoot "special.conf") $filter
+function getFullFilterPath($filter) {
+    if ($filter.Contains(":")) {
+        return $filter
+    }
+    Join-Path $PSScriptRoot $filter
 }
 
 function makeEventQuery($log, $where) {
@@ -170,30 +173,20 @@ function Send-Mail ($subj, $body) {
 
 function runTest($filter) {
     LogWrite("Test filter: '$filter'")
-    $ignoreFilterPath = ignoreFilterPath($filter)
-    $specialFilterPath = specialFilterPath($filter)
-    $where = ""
-    $filterin = ""
-    if (Test-Path $ignoreFilterPath) {
-        $where = (Get-Content $ignoreFilterPath) -join "`n"
-        $filterin = "ignore"
-        LogWrite("Filter found: '$ignoreFilterPath'")
-    }
-    elseif (Test-Path $specialFilterPath) {
-        $where = (Get-Content $specialFilterPath) -join "`n"
-        $filterin = "special"
-        LogWrite("Filter found: '$specialFilterPath'")
+    $filter = getFullFilterPath($filter)
+    if (Test-Path $filter) {
+        $where = (Get-Content $filter) -join "`n"
+        LogWrite("Filter found: '$filter'")
     }
     else {
         LogWrite "Filter '$filter' not found" "red"
         exit(1)
     }
-    $log =  $filter.Split('.')[0]
-    $msg = "Test filter='$filter' in '$filterin' for log='$log'"
+    $log = (Split-Path $filter -leaf).Split('.')[0]
+    $msg = "Test filter='$filter' for log='$log'"
     if ( (Get-EventLog -List | Where-Object {$_.Log -eq $log} ).Length -eq 0) {
         LogWrite "$msg : failed. Log '$log' not found`n" "red"
         exit (1)
-        
     }
     $query = makeEventQuery $log $where
     (getEvents  $log $where).Lenght
@@ -203,7 +196,7 @@ function runTest($filter) {
 ### Task SPECIAL ###
 
 function runSpecial($filter) {
-    $specialFilterPath = specialFilterPath($filter)
+    $specialFilterPath = getFullFilterPath($filter)
     if (Test-Path $specialFilterPath) {
         $where = (Get-Content $specialFilterPath) -join "`n"
     }
@@ -211,7 +204,7 @@ function runSpecial($filter) {
         LogWrite "Special filter '$filter' not found`n" "red"
         exit(1)
     }
-    $log = $filter.Split('.')[0]
+    $log = (Split-Path $filter -leaf).Split('.')[0]
     $totals["allevents"] =  (getEvents $log).Length
     $events = getEvents $log $where
 
@@ -282,6 +275,9 @@ $ini = @{}
 if (Test-Path $inifile) {
     $ini = ConvertFrom-StringData((Get-Content $inifile) -join "`n")
 }
+if (!($ini.ContainsKey("IGNORERULESPATH"))) { 
+    $ini.Add("IGNORERULESPATH", (Join-Path $PSScriptRoot "ignore.conf"))
+}
 if (!($ini.ContainsKey("LOGPATH"))) { 
     $ini.Add("LOGPATH", $PSScriptRoot) # whereis this script
 }
@@ -325,11 +321,12 @@ function LogWrite($msg, $color) {
 
 Logwrite ("Start {0}`n
 Parameters:`n
-    `LOGPATH`t`t= {1}
-    `LOGSTORETIME`t= {2}
-    `RPTPATH`t`t= {3}
-    `DEPTHHOURS`t`t= {4}`n
-    " -f $MyInvocation.MyCommand.Name, 
+    `IGNORERULESPATH`t= {1}
+    `LOGPATH`t`t= {2}
+    `LOGSTORETIME`t= {3}
+    `RPTPATH`t`t= {4}
+    `DEPTHHOURS`t`t= {5}`n
+    " -f $MyInvocation.MyCommand.Name,  $ini["IGNORERULESPATH"],
     $ini["LOGPATH"], $ini["LOGSTORETIME"], $ini["RPTPATH"], $ini["DEPTHHOURS"])
 
 # 1c Step. Check command line
@@ -338,7 +335,7 @@ if (!$mode -or  (($mode -ne "ignore") -and ($mode -ne "special") -and ($mode -ne
     exit(1)
 } 
 elseif ( ($mode -eq "special") -or ($mode -eq "test") ) {
-    if (!$filter) {
+    if (!$filterpath) {
         writeUsage("Error: Filter not set")
         exit(1)
     } 
@@ -355,8 +352,8 @@ $totals = @{
     }
 switch ($mode) {
     "ignore"  { runIgnore }
-    "special" { runSpecial($filter) }
-    "test"    { runTest($filter) }
+    "special" { runSpecial($filterpath) }
+    "test"    { runTest($filterpath) }
 }
 
 LogWrite ("Success")
