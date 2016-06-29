@@ -1,1 +1,0 @@
-SourceName = 'MSSQLSERVER' AND ( EventCode = 18270 OR EventCode = 3014 )
