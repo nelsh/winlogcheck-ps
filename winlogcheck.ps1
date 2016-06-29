@@ -209,11 +209,11 @@ function runSpecial($filter) {
     $events = getEvents $log $where
 
     LogWrite ("Report '{0}'. Found {1} from {2} events" `
-         -f $filter, $events.Length, $totalevents) #,Get-Item env:\Computername).Value
+         -f $filter, $events.Length, $totals["allevents"]) #,Get-Item env:\Computername).Value
 
 #    if ($events.Length -gt 0) {
-        $specialreport = (createReport $events $totalevents $log)
-        Set-Content (Join-Path $ini["RPTPATH"] ($filter + ".html")) $specialreport -Force
+        $specialreport = (createReport $events $totals["allevents"] $log)
+        Set-Content (Join-Path $ini["RPTPATH"] ((Split-Path $filter -leaf) + ".html")) $specialreport -Force
 #    }
     if ([bool]$ini["MAILSEND"])  {
         $subj = "Winlogcheck "`
