@@ -12,14 +12,11 @@ function writeUsage($msg) {
     `$scriptname -mode test -filterpath <absolute_or_relative_filter_path>`n`n"
 }
 
-function ignoreFilterPath($filter) {
-    Join-Path (Join-Path $PSScriptRoot "ignore.conf") $filter
-}
 function getFullFilterPath($filter) {
     if ($filter.Contains(":")) {
-        return $filter
+        return $filter.Trim()
     }
-    Join-Path $PSScriptRoot $filter
+    Join-Path $PSScriptRoot $filter.Trim()
 }
 
 function makeEventQuery($log, $where) {
@@ -234,8 +231,10 @@ function runIgnore() {
     foreach ($l in (Get-EventLog -List)) {
         $log = $l.Log
         $filters = @()
-        foreach ($f in (Get-ChildItem (Join-Path $PSScriptRoot "ignore.conf") -filter "$log.*" -file)) {
-            $filters += , ((get-content $f.FullName) -join "`n")
+        foreach ($filter in $ini["IGNORERULESPATH"]) {
+            foreach ($f in (Get-ChildItem (getFullFilterPath($filter)) -filter "$log.*" -file)) {
+                $filters += , ((get-content $f.FullName) -join "`n")
+            }
         }
         if ($filters.Count -gt 0 ) {
             $where = "(" + [system.String]::Join(") OR (", $filters) + ")"
@@ -276,8 +275,11 @@ if (Test-Path $inifile) {
     $ini = ConvertFrom-StringData((Get-Content $inifile) -join "`n")
 }
 if (!($ini.ContainsKey("IGNORERULESPATH"))) { 
-    $ini.Add("IGNORERULESPATH", (Join-Path $PSScriptRoot "ignore.conf"))
+    $ini.Add("IGNORERULESPATH", @(Join-Path $PSScriptRoot "ignore.conf"))
+} else {
+    $ini["IGNORERULESPATH"] = $ini["IGNORERULESPATH"].Split(",")
 }
+
 if (!($ini.ContainsKey("LOGPATH"))) { 
     $ini.Add("LOGPATH", $PSScriptRoot) # whereis this script
 }
@@ -295,7 +297,6 @@ $ini.Add("DEPTHSTRING", ` #yyyyMMdd HH:00:00
 if ($ini.ContainsKey("MAILADDRESS") -and $ini.ContainsKey("MAILSERVER"))  {
     $ini.Add("MAILSEND", $true) # One day
 }
-
 
 # 1b Step. Simple logging
 # Remove old logfiles (YYYYMMDD.log)
@@ -326,7 +327,7 @@ Parameters:`n
     `LOGSTORETIME`t= {3}
     `RPTPATH`t`t= {4}
     `DEPTHHOURS`t`t= {5}`n
-    " -f $MyInvocation.MyCommand.Name,  $ini["IGNORERULESPATH"],
+    " -f $MyInvocation.MyCommand.Name,  ($ini["IGNORERULESPATH"] -join ', '),
     $ini["LOGPATH"], $ini["LOGSTORETIME"], $ini["RPTPATH"], $ini["DEPTHHOURS"])
 
 # 1c Step. Check command line
