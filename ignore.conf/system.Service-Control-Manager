@@ -3,6 +3,7 @@ AND (
 	Message LIKE '%Application Informat%'	OR 
 	Message LIKE '%Application Experience%'	OR 
 	Message LIKE '%Background Intelligent%'	OR 
+	Message LIKE '%Device Setup Manager%'	OR 
 	Message LIKE '%Diagnostic System Host%'	OR 
 	Message LIKE '%DNS Client%'		OR 
 	Message LIKE '%Microsoft Software Sha%'	OR 
