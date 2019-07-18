@@ -7,6 +7,7 @@ AND (
 	Message LIKE '%Diagnostic System Host%'	OR 
 	Message LIKE '%DNS Client%'		OR 
 	Message LIKE '%Microsoft Software Sha%'	OR 
+	Message LIKE '%Network Setup Service%'	OR 
 	Message LIKE '%Optimize drives%'	OR 
 	Message LIKE '%Portable Device Enum%'	OR 
 	Message LIKE '%Problem Reports and%'	OR 
