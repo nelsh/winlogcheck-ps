@@ -145,7 +145,7 @@ function formatWebEventMsg ($message) {
 }
 
 function Send-Mail ($subj, $body) {
-    $msg = New-Object Net.Mail.MailMessage($ini["MAILADDRESS"], $ini["MAILADDRESS"])
+    $msg = New-Object Net.Mail.MailMessage($ini["MAILFROM"], $ini["MAILTO"])
     $msg.IsBodyHtml = $true
     $msg.Subject = $subj
     $msg.Body = $body
@@ -158,7 +158,7 @@ function Send-Mail ($subj, $body) {
     else {
         $smtp.Host = $ini["MAILSERVER"]
     }
-    #$smtp.EnableSsl = $true 
+    $smtp.EnableSsl = $true 
     if ($ini.ContainsKey("MAILUSER") -and $ini.ContainsKey("MAILPASSWORD"))  {
         $smtp.Credentials = New-Object System.Net.NetworkCredential($ini["MAILUSER"], $ini["MAILPASSWORD"]); 
     }
@@ -294,7 +294,7 @@ if (!($ini.ContainsKey("DEPTHHOURS"))) {
 }
 $ini.Add("DEPTHSTRING", ` #yyyyMMdd HH:00:00
     ((Get-Date).AddHours(-$ini["DEPTHHOURS"]).ToUniversalTime().ToString("yyyyMMdd HH") + ":00:00"))
-if ($ini.ContainsKey("MAILADDRESS") -and $ini.ContainsKey("MAILSERVER"))  {
+if ($ini.ContainsKey("MAILFROM") -and $ini.ContainsKey("MAILTO") -and $ini.ContainsKey("MAILSERVER"))  {
     $ini.Add("MAILSEND", $true) # One day
 }
 
